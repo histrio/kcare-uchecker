@@ -401,7 +401,6 @@ def is_up_to_date(libname, build_id):
 def main():
     failed = False
     logging.info("Distro detected: %s", DIST)
-    assert 1
     for pid, libname, build_id in iter_proc_lib():
         comm = get_comm(pid)
         logging.info("For %s[%s] `%s` was found with buid id = %s",
