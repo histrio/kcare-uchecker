@@ -41,6 +41,7 @@ ELF_NHDR = "<3I"
 PT_NOTE = 4
 NT_GNU_BUILD_ID = 3
 IGNORED_PATHNAME = ["[heap]", "[stack]", "[vdso]", "[vsyscall]", "[vvar]"]
+PROC_SRC = "/proc"
 
 Vma = namedtuple('Vma', 'offset size start end')
 Map = namedtuple('Map', 'addr perm offset dev inode pathname flag')
@@ -276,7 +277,7 @@ def get_build_id(fileobj):
 
 def iter_maps(pid):
     try:
-        with open('/proc/{0:d}/maps'.format(pid), 'r') as mapfd:
+        with open(os.path.join(PROC_SRC, str(pid), 'maps'), 'r') as mapfd:
             for line in mapfd:
                 data = (line.split() + [None, None])[:7]
                 yield Map(*data)
@@ -315,7 +316,7 @@ def get_process_files(pid):
 class FileMMapped(object):
 
     def __init__(self, pid, inode):
-        self.fileobj = open('/proc/{0:d}/mem'.format(pid), 'rb')
+        self.fileobj = open(os.path.join(PROC_SRC, str(pid), 'mem'), 'rb')
         self.vmas = get_vmas(pid, inode)
         self.pos = 0
         self.fileobj.seek(self._get_vma(0).start)
@@ -354,13 +355,13 @@ open_mmapped = FileMMapped
 
 
 def get_comm(pid):
-    comm_filename = '/proc/{0:d}/comm'.format(pid)
+    comm_filename = os.path.join(PROC_SRC, str(pid), 'comm')
     with open(comm_filename, 'r') as fd:
         return fd.read().strip()
 
 
 def iter_pids():
-    for pid in os.listdir('/proc/'):
+    for pid in os.listdir(PROC_SRC):
         try:
             yield int(pid)
         except ValueError:
