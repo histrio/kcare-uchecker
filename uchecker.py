@@ -29,9 +29,12 @@ __version__ = '0.1'
 
 import os
 import re
+import sys
 import json
 import struct
+import shutil
 import logging
+import tempfile
 import subprocess
 
 from collections import namedtuple
@@ -43,6 +46,7 @@ PT_NOTE = 4
 NT_GNU_BUILD_ID = 3
 NT_GO_BUILD_ID = 4
 IGNORED_PATHNAME = ["[heap]", "[stack]", "[vdso]", "[vsyscall]", "[vvar]"]
+MIME_TYPES = [b'application/x-sharedlib', b'application/x-pie-executable']
 
 Vma = namedtuple('Vma', 'offset size start end')
 Map = namedtuple('Map', 'addr perm offset dev inode pathname flag')
@@ -180,6 +184,88 @@ def get_dist():
 
     name, version, codename = linux_distribution(supported_dists=supported_dists)
     return (name + version).replace(' ', '-').lower()
+
+
+def get_all_versions_rpm(package):
+    cmd = ["yum", "list", "available", package + ".x86_64", "--showduplicates",
+           "--enablerepo=*", "--disablerepo=*media*"]
+    for line in check_output(cmd).split('\n'):
+        if line.startswith(package):
+            # TODO: use repo also
+            _, version, repo = line.split()
+            if version.startswith(b'1:'):
+                version = version[2:]
+            yield repo, version
+
+
+def get_all_versions_deb(package):
+    cmd = ["apt-cache", "madison", package]
+    for line in check_output(cmd).split('\n'):
+        if line.strip().startswith(package):
+            _, version, repo = [it.strip() for it in line.split('|')]
+            yield repo, version
+
+
+def download_and_unpack_deb(package, version, dest):
+    cmd = ["apt-get", "install", "-y", "--reinstall", "--force-yes", "--download-only", "-o=dir::cache={0}".format(dest), "-o=Debug::NoLocking=1", package + '=' + version]
+    subprocess.check_call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    pkg_path = os.path.join(dest, 'archives', '{0}_{1}_amd64.deb'.format(package, version))
+    cmd = ["dpkg", "-x", pkg_path, dest]
+    subprocess.check_call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return dest
+
+
+def download_and_unpack_rpm(package, version, dest):
+    package = package + '-' + version
+    cmd = ["yumdownloader", "-x", "*i686", "--enablerepo=*", "--disablerepo=*media*",
+           "--archlist=x86_64", "--nogpgcheck", "--destdir=" + dest, package]
+    subprocess.check_call(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    pkg_path = os.path.join(dest, package + '.x86_64.rpm')
+    rpm2cpio = subprocess.Popen(["rpm2cpio", pkg_path], stdout=subprocess.PIPE)
+    cpio = subprocess.Popen(["cpio", "-idv"], stdin=rpm2cpio.stdout, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, cwd=dest)
+    rpm2cpio.stdout.close()
+    cpio.communicate()
+    return dest
+
+
+def update_package_cache():
+    check_output(["apt", "update"])
+    check_output(["yum", "makecache"])
+
+
+def iter_shared_libs(src):
+    for root, _, files in os.walk(src):
+        for fname in files:
+            fpath = os.path.join(root, fname)
+            out = check_output(["file", "--mime-type", fpath])
+            _, _, mime = out.partition(b' ')
+            mime = mime.rstrip()
+            if mime in MIME_TYPES:
+                yield fpath
+
+
+def _fetch(package_name):
+    update_package_cache()
+    for dist in ('rpm', 'deb'):
+        download_and_unpack = globals()['download_and_unpack_' + dist]
+        get_all_versions = globals()['get_all_versions_' + dist]
+        for repo, version in get_all_versions(package_name):
+            src = tempfile.mkdtemp('-fetch')
+            download_and_unpack(package_name, version, src)
+            for slib in iter_shared_libs(src):
+                libname = os.path.basename(slib)
+                with open(slib, 'r') as fd:
+                    build_id = get_build_id(fd)
+                yield package_name, repo, version, libname, build_id
+            shutil.rmtree(src)
+
+
+def fetch(packages):
+    for package in packages:
+        for rec in _fetch(package):
+            res = dict(zip(["dist", "package", "repo", "version", "soname", "build_id"], (DIST, ) + rec))
+            print(json.dumps(res))
 
 
 def get_patched_data():
@@ -467,4 +553,6 @@ def main():
 
 
 if __name__ == '__main__':
+    if 'FETCH_MODE' in os.environ:
+        exit(fetch(filter(None, sys.argv[0:])))
     exit(main())
