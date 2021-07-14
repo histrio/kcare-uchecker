@@ -17,7 +17,7 @@ REPOS_PARAMS = ["--enablerepo=*", "--disablerepo=*media*"]
 
 
 def get_all_versions_rpm(package, latest=False):
-    cmd = ["yum", "list", "all", package + ".x86_64"]
+    cmd = ["yum", "list", "available", package + ".x86_64"]
     if not latest:
         cmd += ["--showduplicates", ]
     cmd += REPOS_PARAMS
