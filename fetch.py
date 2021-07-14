@@ -17,7 +17,7 @@ REPOS_PARAMS = ["--enablerepo=*", "--disablerepo=*media*"]
 
 
 def get_all_versions_rpm(package, latest=False):
-    cmd = ["yum", "list", "available", package + ".x86_64"]
+    cmd = ["yum", "list", "all", package + ".x86_64"]
     if not latest:
         cmd += ["--showduplicates", ]
     cmd += REPOS_PARAMS
@@ -67,6 +67,8 @@ def iter_shared_libs(src):
     for root, _, files in os.walk(src):
         for fname in files:
             fpath = os.path.join(root, fname)
+            if ".build-id" in fpath:
+                continue
             try:
                 with open(fpath, 'rb') as fd:
                     build_id = get_build_id(fd)
