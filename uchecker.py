@@ -44,6 +44,11 @@ NT_GNU_BUILD_ID = 3
 NT_GO_BUILD_ID = 4
 IGNORED_PATHNAME = ["[heap]", "[stack]", "[vdso]", "[vsyscall]", "[vvar]"]
 
+ELF_MAGIC_BYTES = b'\x7fELF\x02\x01'
+PROC_TIMEOUT = 30
+MAX_NOTE_SIZE = 4096
+BYTE_ALIGNMENT = 4
+
 Vma = namedtuple('Vma', 'offset size start end')
 Map = namedtuple('Map', 'addr perm offset dev inode pathname flag')
 
@@ -68,22 +73,6 @@ def normalize(data, encoding='utf-8'):
         return data.encode(encoding)
 
 
-def check_output(*args, **kwargs):
-    """ Backported implementation for check_output.
-    """
-    out = ''
-    try:
-        p = subprocess.Popen(stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                             *args, **kwargs)
-        out, err = p.communicate()
-        if err or p.returncode != 0:
-            raise OSError("{0} ({1})".format(err, p.returncode))
-    except OSError as e:
-        logging.debug('Subprocess `%s %s` error: %s',
-                      args, kwargs, e)
-    return normalize(out)
-
-
 def check_output_with_timeout(*args, **kwargs):
     """Enhanced check_output with timeout support for Python 2/3."""
     timeout = kwargs.pop('timeout', 30)
@@ -94,7 +83,6 @@ def check_output_with_timeout(*args, **kwargs):
         def timeout_handler(signum, frame):
             raise OSError("Command timed out")
         
-        # Set up timeout (Unix only)
         if hasattr(signal, 'SIGALRM'):
             old_handler = signal.signal(signal.SIGALRM, timeout_handler)
             signal.alarm(timeout)
@@ -285,10 +273,6 @@ class BuildIDParsingException(Exception):
     pass
 
 
-ELF_MAGIC_BYTES = b'\x7fELF\x02\x01'
-PROC_TIMEOUT = 30
-MAX_NOTE_SIZE = 4096
-BYTE_ALIGNMENT = 4
 
 def get_build_id(fileobj):
 
@@ -336,6 +320,8 @@ def get_build_id(fileobj):
 
                 logging.debug("n_type: %d, n_namesz: %d, n_descsz: %d)",
                               n_type, n_namesz, n_descsz)
+                if n_namesz > MAX_NOTE_SIZE or n_descsz > MAX_NOTE_SIZE:
+                    raise BuildIDParsingException("Note section too large")
                 fileobj.read(n_namesz)
                 desc = struct.unpack("<{0}B".format(n_descsz), fileobj.read(n_descsz))
             if n_type is not None:
