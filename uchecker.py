@@ -122,7 +122,7 @@ def _linux_distribution(*args, **kwargs):
         elif k in ('distributor id', ):
             lsb_release['distributor_id'] = v
         elif k in ('description', ):
-            lsb_release['desciption_version_id'] = 'test'
+            lsb_release['description_version_id'] = v.split(' ')[-1] if v else ''
 
     for dist_file in sorted(check_output(['ls', '/etc']).split('\n')):
         if (dist_file.endswith('-release') or dist_file.endswith('_version')):
@@ -246,6 +246,11 @@ class BuildIDParsingException(Exception):
     pass
 
 
+ELF_MAGIC_BYTES = b'\x7fELF\x02\x01'
+PROC_TIMEOUT = 30
+MAX_NOTE_SIZE = 4096
+BYTE_ALIGNMENT = 4
+
 def get_build_id(fileobj):
 
     try:
@@ -260,7 +265,7 @@ def get_build_id(fileobj):
      e_shentsize, e_shnum, e_shstrndx) = hdr
 
     # Not an ELF file
-    if not e_ident.startswith(b'\x7fELF\x02\x01'):
+    if not e_ident.startswith(ELF_MAGIC_BYTES):
         raise NotAnELFException("Wrong header")
 
     # No program headers
@@ -285,10 +290,10 @@ def get_build_id(fileobj):
                 n_namesz, n_descsz, n_type = struct.unpack(ELF_NHDR, nhdr)
 
                 # 4-byte align
-                if n_namesz % 4:
-                    n_namesz = ((n_namesz // 4) + 1) * 4
-                if n_descsz % 4:
-                    n_descsz = ((n_descsz // 4) + 1) * 4
+                if n_namesz % BYTE_ALIGNMENT:
+                    n_namesz = ((n_namesz // BYTE_ALIGNMENT) + 1) * BYTE_ALIGNMENT
+                if n_descsz % BYTE_ALIGNMENT:
+                    n_descsz = ((n_descsz // BYTE_ALIGNMENT) + 1) * BYTE_ALIGNMENT
 
                 logging.debug("n_type: %d, n_namesz: %d, n_descsz: %d)",
                               n_type, n_namesz, n_descsz)
@@ -419,10 +424,10 @@ def iter_proc_lib():
                 with get_fileobj(pid, inode, pathname) as fileobj:
                     cache[inode] = get_build_id(fileobj)
             except (NotAnELFException, BuildIDParsingException, IOError) as err:
-                logging.info("Can't read buildID from {0}: {1}".format(pathname, repr(err)))
+                logging.info("Can't read buildID from %s: %s", pathname, repr(err))
                 cache[inode] = None
             except Exception as err:
-                logging.error("Can't read buildID from {0}: {1}".format(pathname, repr(err)))
+                logging.error("Can't read buildID from %s: %s", pathname, repr(err))
                 cache[inode] = None
         build_id = cache[inode]
         yield pid, os.path.basename(pathname), build_id
