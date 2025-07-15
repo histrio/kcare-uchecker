@@ -75,7 +75,7 @@ def normalize(data, encoding='utf-8'):
 
 def check_output_with_timeout(*args, **kwargs):
     """Enhanced check_output with timeout support for Python 2/3."""
-    timeout = kwargs.pop('timeout', 30)
+    timeout = kwargs.pop('timeout', PROC_TIMEOUT)
 
     try:
         import signal
