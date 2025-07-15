@@ -78,6 +78,9 @@ def check_output_with_timeout(*args, **kwargs):
     """Enhanced check_output with timeout support for Python 2/3."""
     timeout = kwargs.pop('timeout', PROC_TIMEOUT)
 
+    # SubprocessError is not available in Python 2.7
+    SubprocessError = (getattr(subprocess, 'SubprocessError', OSError), OSError)
+
     try:
 
         def timeout_handler(signum, frame):
@@ -106,7 +109,7 @@ def check_output_with_timeout(*args, **kwargs):
                 signal.signal(signal.SIGALRM, old_handler)
             raise
 
-    except (subprocess.SubprocessError, OSError) as e:
+    except SubprocessError as e:
         logging.error('Subprocess error running %s: %s', args, str(e))
         return ''
     except Exception as e:
