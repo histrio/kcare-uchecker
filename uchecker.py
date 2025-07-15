@@ -84,6 +84,45 @@ def check_output(*args, **kwargs):
     return normalize(out)
 
 
+def check_output_with_timeout(*args, **kwargs):
+    """Enhanced check_output with timeout support for Python 2/3."""
+    timeout = kwargs.pop('timeout', 30)
+    
+    try:
+        import signal
+        
+        def timeout_handler(signum, frame):
+            raise OSError("Command timed out")
+        
+        # Set up timeout (Unix only)
+        if hasattr(signal, 'SIGALRM'):
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(timeout)
+        
+        try:
+            p = subprocess.Popen(stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               *args, **kwargs)
+            out, err = p.communicate()
+            
+            if hasattr(signal, 'SIGALRM'):
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+            
+            if err or p.returncode != 0:
+                raise OSError("{0} ({1})".format(normalize(err), p.returncode))
+            return normalize(out)
+            
+        except OSError:
+            if hasattr(signal, 'SIGALRM'):
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+            raise
+            
+    except Exception as e:
+        logging.debug('Subprocess error: %s', str(e))
+        return ''
+
+
 def _linux_distribution(*args, **kwargs):
     """
     An alternative implementation became necessary because Python
@@ -92,11 +131,11 @@ def _linux_distribution(*args, **kwargs):
     Additional parameters like `full_distribution_name` are not implemented.
     """
 
-    uname_raw = check_output(['uname', '-rs'])
+    uname_raw = check_output_with_timeout(['uname', '-rs'])
     uname_name, _, uname_version = uname_raw.partition(' ')
     uname = {'id': uname_name.lower(), 'name': uname_name, 'release': uname_version}
 
-    os_release_raw = check_output(['cat', '/etc/os-release'])
+    os_release_raw = check_output_with_timeout(['cat', '/etc/os-release'])
     os_release = {}
     for line in os_release_raw.split('\n'):
         k, _, v = line.partition('=')
@@ -110,7 +149,7 @@ def _linux_distribution(*args, **kwargs):
         elif k in ('pretty_name', ):
             os_release['pretty_name_version_id'] = v.split(' ')[-1]
 
-    lsb_release_raw = check_output(['lsb_release', '-a'])
+    lsb_release_raw = check_output_with_timeout(['lsb_release', '-a'])
     lsb_release = {}
     for line in lsb_release_raw.split('\n'):
         k, _, v = line.partition(':')
@@ -124,9 +163,9 @@ def _linux_distribution(*args, **kwargs):
         elif k in ('description', ):
             lsb_release['description_version_id'] = v.split(' ')[-1] if v else ''
 
-    for dist_file in sorted(check_output(['ls', '/etc']).split('\n')):
+    for dist_file in sorted(check_output_with_timeout(['ls', '/etc']).split('\n')):
         if (dist_file.endswith('-release') or dist_file.endswith('_version')):
-            distro_release_raw = check_output(['cat', os.path.join('/etc', dist_file)])
+            distro_release_raw = check_output_with_timeout(['cat', os.path.join('/etc', dist_file)])
             if distro_release_raw:
                 break
 
@@ -194,7 +233,7 @@ def get_patched_data():
         return result
 
     try:
-        std_out = check_output([LIBCARE_CLIENT, 'info', '-j'])
+        std_out = check_output_with_timeout([LIBCARE_CLIENT, 'info', '-j'])
         for line in std_out.splitlines():
             try:
                 item = json.loads(line)
