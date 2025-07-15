@@ -26,18 +26,18 @@ def tests_get_patched_data(mock_system, tmpdir):
         libcare_ctl.ensure(file=0)
         assert uchecker.get_patched_data() == set()
         libcare_ctl.ensure(file=1)
-        with mock.patch('uchecker.check_output', return_value='{}'):
+        with mock.patch('uchecker.check_output_with_timeout', return_value='{}'):
             assert uchecker.get_patched_data() == set()
-        with mock.patch('uchecker.check_output', return_value='{wrong-format}'):
+        with mock.patch('uchecker.check_output_with_timeout', return_value='{wrong-format}'):
             assert uchecker.get_patched_data() == set()
-        with mock.patch('uchecker.check_output', return_value=LIBCARE_INFO_OUT):
+        with mock.patch('uchecker.check_output_with_timeout', return_value=LIBCARE_INFO_OUT):
             assert uchecker.get_patched_data() == {
                 (20025, '4cf1939f660008cfa869d8364651f31aacd2c1c4'),
                 (20025, 'f9fafde281e0e0e2af45911ad0fa115b64c2cea8'),
                 (20026, '4cf1939f660008cfa869d8364651f31aacd2c1c4'),
                 (20026, 'f9fafde281e0e0e2af45911ad0fa115b64c2ce10')
             }
-        with mock.patch('uchecker.check_output', side_effect=IOError('test')):
+        with mock.patch('uchecker.check_output_with_timeout', side_effect=IOError('test')):
             assert uchecker.get_patched_data() == set()
         with mock.patch('uchecker.LIBCARE_CLIENT', '/file/that/not/exists/'):
             assert uchecker.get_patched_data() == set()
@@ -112,6 +112,10 @@ def test_normalize_string():
 
 def test_normalize_bytes():
     assert uchecker.normalize(b"hello") == "hello"
+
+
+def test_normalize_unicode():
+    assert uchecker.normalize(u"hello") == "hello"
 
 
 def test_normalize_non_string_bytes():
