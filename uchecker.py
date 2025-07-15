@@ -31,6 +31,7 @@ import os
 import re
 import json
 import struct
+import signal
 import logging
 import subprocess
 
@@ -78,7 +79,6 @@ def check_output_with_timeout(*args, **kwargs):
     timeout = kwargs.pop('timeout', PROC_TIMEOUT)
 
     try:
-        import signal
 
         def timeout_handler(signum, frame):
             raise OSError("Command timed out")
