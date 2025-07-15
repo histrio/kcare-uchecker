@@ -76,36 +76,36 @@ def normalize(data, encoding='utf-8'):
 def check_output_with_timeout(*args, **kwargs):
     """Enhanced check_output with timeout support for Python 2/3."""
     timeout = kwargs.pop('timeout', 30)
-    
+
     try:
         import signal
-        
+
         def timeout_handler(signum, frame):
             raise OSError("Command timed out")
-        
+
         if hasattr(signal, 'SIGALRM'):
             old_handler = signal.signal(signal.SIGALRM, timeout_handler)
             signal.alarm(timeout)
-        
+
         try:
             p = subprocess.Popen(stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               *args, **kwargs)
+                                 *args, **kwargs)
             out, err = p.communicate()
-            
+
             if hasattr(signal, 'SIGALRM'):
                 signal.alarm(0)
                 signal.signal(signal.SIGALRM, old_handler)
-            
+
             if err or p.returncode != 0:
                 raise OSError("{0} ({1})".format(normalize(err), p.returncode))
             return normalize(out)
-            
+
         except OSError:
             if hasattr(signal, 'SIGALRM'):
                 signal.alarm(0)
                 signal.signal(signal.SIGALRM, old_handler)
             raise
-            
+
     except Exception as e:
         logging.debug('Subprocess error: %s', str(e))
         return ''
@@ -271,7 +271,6 @@ class NotAnELFException(Exception):
 
 class BuildIDParsingException(Exception):
     pass
-
 
 
 def get_build_id(fileobj):
