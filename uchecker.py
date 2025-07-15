@@ -107,10 +107,10 @@ def check_output_with_timeout(*args, **kwargs):
             raise
 
     except (subprocess.SubprocessError, OSError) as e:
-        logging.error('Subprocess error: %s', str(e))
+        logging.error('Subprocess error running %s: %s', args, str(e))
         return ''
     except Exception as e:
-        logging.critical('Unexpected error: %s', str(e))
+        logging.critical('Unexpected error running %s: %s', args, str(e))
         raise
 
 
