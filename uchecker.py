@@ -106,9 +106,12 @@ def check_output_with_timeout(*args, **kwargs):
                 signal.signal(signal.SIGALRM, old_handler)
             raise
 
-    except Exception as e:
-        logging.debug('Subprocess error: %s', str(e))
+    except (subprocess.SubprocessError, OSError) as e:
+        logging.error('Subprocess error: %s', str(e))
         return ''
+    except Exception as e:
+        logging.critical('Unexpected error: %s', str(e))
+        raise
 
 
 def _linux_distribution(*args, **kwargs):
